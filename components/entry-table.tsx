@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+// Importando jsPDF para a função generatePDF
+import jsPDF from "jspdf"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,8 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-// NOVO: Adicionado o ícone FileText que estava faltando na importação
-import { Trash2, Search, Eye, Phone, MapPin, Building, User, FileText } from "lucide-react"
+import { Trash2, Search, Eye, Phone, MapPin, Building, User, FileText, Calendar } from "lucide-react"
 import type { Entry } from "@/app/page"
 
 interface EntryTableProps {
@@ -29,25 +30,15 @@ interface EntryTableProps {
   onDelete: (id: string) => void
 }
 
-// Função auxiliar para converter strings de data em objetos Date
+// Função auxiliar para converter strings de data
 const parseDate = (dateString: string): Date | null => {
-  if (!dateString) return null
-  
-  const partsBR = dateString.split('/')
-  if (partsBR.length === 3) {
-    const [day, month, year] = partsBR.map(Number)
-    return new Date(year, month - 1, day)
-  }
-
-  const partsISO = dateString.split('-')
-  if (partsISO.length === 3) {
-    const [year, month, day] = partsISO.map(Number)
-    return new Date(year, month - 1, day)
-  }
-
-  return null
+    const datePart = dateString.split(" ")[0]
+    const [day, month, year] = datePart.split("/").map(Number)
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        return new Date(year, month - 1, day)
+    }
+    return null
 }
-
 
 export function EntryTable({ entries, onDelete }: EntryTableProps) {
   const [searchTerm, setSearchTerm] = useState("")
@@ -60,43 +51,108 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
       onDelete(id)
     }
   }
-  
+
   const filteredEntries = entries.filter((entry) => {
     const matchesSearch =
-      (entry.nome && entry.nome.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (entry.cpf && entry.cpf.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (entry.funcao && entry.funcao.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (entry.orgao && entry.orgao.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (entry.municipio && entry.municipio.toLowerCase().includes(searchTerm.toLowerCase()))
+      (entry.nome?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (entry.cpf?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (entry.funcao?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (entry.orgao?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (entry.municipio?.toLowerCase() || "").includes(searchTerm.toLowerCase())
 
     let matchesDate = true
-    
-    const entryDateStr = entry.dataHoraEntrada.split(",")[0].trim()
-    const entryDate = parseDate(entryDateStr)
+    if (startDate || endDate) {
+        const entryDate = parseDate(entry.dataHoraEntrada)
+        const start = startDate ? new Date(startDate) : null
+        const end = endDate ? new Date(endDate) : null
 
-    if (entryDate) {
-      const start = parseDate(startDate)
-      const end = parseDate(endDate)
-
-      if (end) {
-        end.setHours(23, 59, 59, 999)
-      }
-      
-      if (start && end) {
-        matchesDate = entryDate >= start && entryDate <= end
-      } else if (start) {
-        matchesDate = entryDate >= start
-      } else if (end) {
-        matchesDate = entryDate <= end
-      }
+        if (entryDate) {
+            if (end) end.setHours(23, 59, 59, 999)
+            
+            if (start && end) {
+                matchesDate = entryDate >= start && entryDate <= end
+            } else if (start) {
+                matchesDate = entryDate >= start
+            } else if (end) {
+                matchesDate = entryDate <= end
+            }
+        } else {
+            matchesDate = false
+        }
     }
-
+    
     return matchesSearch && matchesDate
   })
 
+  // ALTERADO: Função generatePDF modificada para incluir a FUNÇÃO
+  const generatePDF = async () => {
+    try {
+      const { jsPDF } = await import("jspdf")
+      const doc = new jsPDF({ orientation: "landscape" }) 
+
+      doc.setFontSize(16)
+      doc.text("Relatório de Entradas", 20, 20)
+
+      if (startDate || endDate) {
+        doc.setFontSize(12)
+        const startFormatted = startDate ? new Date(startDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : "Início"
+        const endFormatted = endDate ? new Date(endDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : "Hoje"
+        const periodo = `Período: ${startFormatted} até ${endFormatted}`
+        doc.text(periodo, 20, 30)
+      }
+
+      doc.setFontSize(10)
+      let y = startDate || endDate ? 45 : 35
+      const startX = 14
+
+      // Cabeçalho da tabela com a coluna "Função" e posições ajustadas
+      doc.text("Nome", startX, y)
+      doc.text("CPF", startX + 55, y)
+      doc.text("Função", startX + 85, y) // Adicionado
+      doc.text("Telefone", startX + 125, y) // Ajustado
+      doc.text("Órgão", startX + 155, y) // Ajustado
+      doc.text("Data/Hora", startX + 210, y) // Ajustado
+
+      y += 5
+      doc.line(startX, y, 280, y)
+
+      y += 7
+      filteredEntries.forEach((entry) => {
+        if (y > 190) {
+          doc.addPage()
+          y = 20
+        }
+
+        // Dados da tabela com a coluna "Função" e posições ajustadas
+        doc.text(entry.nome.substring(0, 28), startX, y)
+        doc.text(entry.cpf || "N/A", startX + 55, y)
+        doc.text(entry.funcao.substring(0, 18) || "N/A", startX + 85, y) // Adicionado
+        doc.text(entry.telefone || "N/A", startX + 125, y) // Ajustado
+        doc.text(entry.orgao.substring(0, 25), startX + 155, y) // Ajustado
+        doc.text(entry.dataHoraEntrada, startX + 210, y) // Ajustado
+
+        y += 7
+      })
+
+      const pageCount = doc.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setFontSize(8)
+        doc.text(`Total de registros: ${filteredEntries.length}`, startX, 200)
+        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 40, 200)
+        doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, startX, 205)
+      }
+
+      const fileName = `relatorio-entradas-${new Date().toISOString().split("T")[0]}.pdf`
+      doc.save(fileName)
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error)
+      alert("Erro ao gerar o relatório PDF. Tente novamente.")
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {/* Seção de Filtros */}
       <div className="flex flex-col md:flex-row gap-4">
         <div className="flex-1">
           <Label htmlFor="search">Pesquisar</Label>
@@ -112,29 +168,36 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
           </div>
         </div>
         <div className="flex items-end gap-2">
-          <div>
-            <Label htmlFor="start-date">Data de Início</Label>
-            <Input
-              id="start-date"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label htmlFor="end-date">Data Final</Label>
-            <Input
-              id="end-date"
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-            />
-          </div>
+            <div>
+                <Label htmlFor="start-date">De:</Label>
+                <Input
+                    id="start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-auto"
+                />
+            </div>
+            <div>
+                <Label htmlFor="end-date">Até:</Label>
+                <Input
+                    id="end-date"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-auto"
+                />
+            </div>
+        </div>
+        <div className="flex items-end">
+            <Button onClick={generatePDF} variant="outline">
+                <FileText className="h-4 w-4 mr-2" />
+                Gerar PDF
+            </Button>
         </div>
       </div>
 
-      {/* Tabela de Registros */}
-      <div className="border rounded-lg overflow-hidden">
+      <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -142,7 +205,7 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
               <TableHead>Nome</TableHead>
               <TableHead>CPF</TableHead>
               <TableHead>Órgão</TableHead>
-              <TableHead>Data e Hora de Entrada</TableHead>
+              <TableHead>Data/Hora</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -153,13 +216,13 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
                   <img
                     src={entry.foto || "/placeholder.svg"}
                     alt={`Foto de ${entry.nome}`}
-                    className="h-10 w-10 rounded-full object-cover"
+                    className="w-10 h-10 object-cover rounded-full"
                   />
                 </TableCell>
                 <TableCell className="font-medium">{entry.nome}</TableCell>
                 <TableCell>{entry.cpf}</TableCell>
                 <TableCell>{entry.orgao}</TableCell>
-                <TableCell>{entry.dataHoraEntrada}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{entry.dataHoraEntrada}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
                     <Dialog onOpenChange={(open) => !open && setSelectedEntry(null)}>
@@ -168,54 +231,51 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
                           <Eye className="h-4 w-4" />
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="sm:max-w-md">
+                      <DialogContent className="max-w-md">
                         <DialogHeader>
-                          <DialogTitle>Detalhes do Registro</DialogTitle>
+                          <DialogTitle>Detalhes da Entrada</DialogTitle>
                         </DialogHeader>
                         {selectedEntry && (
-                          <div className="flex flex-col sm:flex-row gap-6 py-4">
-                            <img
-                              src={selectedEntry.foto || "/placeholder.svg"}
-                              alt={`Foto de ${selectedEntry.nome}`}
-                              className="h-32 w-32 rounded-lg object-cover mx-auto sm:mx-0"
-                            />
-                            <div className="space-y-2 text-sm">
-                              <div className="flex items-center gap-2">
-                                <User className="h-4 w-4 text-muted-foreground" />
-                                <span className="font-semibold">{selectedEntry.nome}</span>
-                              </div>
-                              
-                              {/* ALTERAÇÃO AQUI: Adicionado o campo de CPF */}
-                              <div className="flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-muted-foreground" />
-                                <Badge variant="secondary">{selectedEntry.cpf}</Badge>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                <Building className="h-4 w-4 text-muted-foreground" />
-                                <span>
-                                  {selectedEntry.funcao} em{" "}
-                                  <span className="font-medium">{selectedEntry.orgao}</span>
-                                </span>
-                              </div>
-                              {selectedEntry.municipio && (
-                                <div className="flex items-center gap-2">
-                                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                                  <span>{selectedEntry.municipio}</span>
+                            <div className="space-y-4">
+                                {selectedEntry.foto && (
+                                <div className="flex justify-center">
+                                    <img
+                                    src={selectedEntry.foto || "/placeholder.svg"}
+                                    alt={`Foto de ${selectedEntry.nome}`}
+                                    className="w-24 h-24 object-cover rounded-full"
+                                    />
                                 </div>
-                              )}
-                              {selectedEntry.telefone && (
-                                <div className="flex items-center gap-2">
-                                  <Phone className="h-4 w-4 text-muted-foreground" />
-                                  <span>{selectedEntry.telefone}</span>
+                                )}
+                                <div className="space-y-3">
+                                    <div>
+                                        <h3 className="font-semibold text-lg">{selectedEntry.nome}</h3>
+                                        <div className="flex items-center gap-2 text-sm mt-1">
+                                            <FileText className="h-4 w-4 text-muted-foreground" />
+                                            <Badge variant="secondary">{selectedEntry.cpf}</Badge>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Building className="h-4 w-4 text-muted-foreground" />
+                                        <span>{selectedEntry.funcao} em {selectedEntry.orgao}</span>
+                                    </div>
+                                    {selectedEntry.municipio && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                                        <span>{selectedEntry.municipio}</span>
+                                        </div>
+                                    )}
+                                    {selectedEntry.telefone && (
+                                        <div className="flex items-center gap-2 text-sm">
+                                        <Phone className="h-4 w-4 text-muted-foreground" />
+                                        <span>{selectedEntry.telefone}</span>
+                                        </div>
+                                    )}
+                                    <div className="pt-2 border-t">
+                                        <p className="text-sm text-muted-foreground">Entrada registrada em:</p>
+                                        <p className="font-medium">{selectedEntry.dataHoraEntrada}</p>
+                                    </div>
                                 </div>
-                              )}
-                              <div className="pt-2 border-t">
-                                <p className="text-sm text-muted-foreground">Entrada registrada em:</p>
-                                <p className="font-medium">{selectedEntry.dataHoraEntrada}</p>
-                              </div>
                             </div>
-                          </div>
                         )}
                       </DialogContent>
                     </Dialog>
@@ -234,6 +294,7 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
           </TableBody>
         </Table>
       </div>
+
       {filteredEntries.length === 0 && (searchTerm || startDate || endDate) && (
         <div className="text-center py-4">
           <p className="text-muted-foreground">Nenhum registro encontrado para os filtros aplicados.</p>
