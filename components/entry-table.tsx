@@ -21,6 +21,7 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
 
+  // ==================== AQUI ESTÁ A CORREÇÃO ====================
   const filteredEntries = entries.filter((entry) => {
     const matchesSearch =
       entry.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -30,66 +31,67 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
 
     if (!startDate && !endDate) return matchesSearch
 
-    const entryDate = new Date(entry.dataHoraEntrada.split(" ")[0].split("/").reverse().join("-"))
-    const start = startDate ? new Date(startDate) : null
-    const end = endDate ? new Date(endDate) : null
+    // Converte a data da entrada (DD/MM/YYYY) para um objeto Date
+    const dateParts = entry.dataHoraEntrada.split(",")[0].split("/")
+    const entryDate = new Date(Number(dateParts[2]), Number(dateParts[1]) - 1, Number(dateParts[0]))
 
     let matchesDate = true
-    if (start) matchesDate = matchesDate && entryDate >= start
-    if (end) matchesDate = matchesDate && entryDate <= end
+
+    if (startDate) {
+      // Converte a data do filtro (YYYY-MM-DD) para um objeto Date
+      const startParts = startDate.split("-")
+      const start = new Date(Number(startParts[0]), Number(startParts[1]) - 1, Number(startParts[2]))
+      start.setHours(0, 0, 0, 0) // Garante que a comparação é desde o INÍCIO do dia
+      if (entryDate < start) {
+        matchesDate = false
+      }
+    }
+
+    if (endDate) {
+      // Converte a data do filtro (YYYY-MM-DD) para um objeto Date
+      const endParts = endDate.split("-")
+      const end = new Date(Number(endParts[0]), Number(endParts[1]) - 1, Number(endParts[2]))
+      end.setHours(23, 59, 59, 999) // Garante que a comparação inclui o dia inteiro até o FIM
+      if (entryDate > end) {
+        matchesDate = false
+      }
+    }
 
     return matchesSearch && matchesDate
   })
+  // ==============================================================
 
   const generatePDF = async () => {
     try {
-      // Importação dinâmica do jsPDF
       const { jsPDF } = await import("jspdf")
-
       const doc = new jsPDF()
-
-      // Título
       doc.setFontSize(16)
       doc.text("Relatório de Entradas", 20, 20)
-
-      // Período (se filtrado)
       if (startDate || endDate) {
         doc.setFontSize(12)
         const periodo = `Período: ${startDate || "Início"} até ${endDate || "Hoje"}`
         doc.text(periodo, 20, 30)
       }
-
-      // Cabeçalho da tabela
       doc.setFontSize(10)
       let y = startDate || endDate ? 45 : 35
-
       doc.text("Nome", 20, y)
       doc.text("Função", 70, y)
       doc.text("Órgão", 110, y)
       doc.text("Data/Hora", 150, y)
-
-      // Linha separadora
       y += 5
       doc.line(20, y, 190, y)
-
-      // Dados
       y += 10
-      filteredEntries.forEach((entry, index) => {
+      filteredEntries.forEach((entry) => {
         if (y > 270) {
-          // Nova página se necessário
           doc.addPage()
           y = 20
         }
-
         doc.text(entry.nome.substring(0, 20), 20, y)
         doc.text(entry.funcao.substring(0, 15), 70, y)
         doc.text(entry.orgao.substring(0, 15), 110, y)
         doc.text(entry.dataHoraEntrada, 150, y)
-
         y += 8
       })
-
-      // Rodapé
       const totalPages = doc.getNumberOfPages()
       for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i)
@@ -98,8 +100,6 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
         doc.text(`Página ${i} de ${totalPages}`, 150, 290)
         doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 20, 285)
       }
-
-      // Download
       const fileName = `relatorio-entradas-${new Date().toISOString().split("T")[0]}.pdf`
       doc.save(fileName)
     } catch (error) {
@@ -125,7 +125,7 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
     )
   }
 
-  return (
+return (
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row gap-4">
         <div className="flex items-center gap-2 flex-1">
@@ -204,7 +204,9 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
                 <TableCell className="text-sm text-muted-foreground">{entry.dataHoraEntrada}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <Dialog>
+                    {/* ==================== AQUI ESTÁ A CORREÇÃO ==================== */}
+                    <Dialog modal={false}>
+                    {/* ================================================================ */}
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm" onClick={() => setSelectedEntry(entry)}>
                           <Eye className="h-4 w-4" />

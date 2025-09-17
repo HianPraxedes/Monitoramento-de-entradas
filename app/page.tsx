@@ -25,11 +25,14 @@ const isElectron = typeof window !== "undefined" && window.electronAPI
 
 export default function Home() {
   const [entries, setEntries] = useState<Entry[]>([])
-  // ADICIONADO: Um novo estado para controlar o carregamento inicial
   const [isLoaded, setIsLoaded] = useState(false)
   const { toast } = useToast()
+  
+  // ==================== INÍCIO DA CORREÇÃO ====================
+  // 1. Adicione um estado para controlar a aba ativa
+  const [activeTab, setActiveTab] = useState("form")
+  // ==================== FIM DA CORREÇÃO =======================
 
-  // Carrega os dados uma vez ao iniciar
   useEffect(() => {
     const loadEntries = async () => {
       if (isElectron) {
@@ -44,22 +47,15 @@ export default function Home() {
         const savedEntries = localStorage.getItem("entryMonitoring")
         if (savedEntries) setEntries(JSON.parse(savedEntries))
       }
-      // CORREÇÃO: Marca que o carregamento terminou
       setIsLoaded(true)
     }
     loadEntries()
-  }, []) // O array vazio [] garante que isto só corre uma vez
+  }, [])
 
-  // Guarda os dados sempre que 'entries' muda
   useEffect(() => {
-    // CORREÇÃO: Só começa a guardar DEPOIS que o carregamento inicial terminou.
-    // Isto evita que uma lista vazia seja guardada antes de os dados serem lidos.
     if (!isLoaded) return
 
     const saveEntries = async () => {
-      // CORREÇÃO: A verificação "if (entries.length === 0) return" foi removida.
-      // Agora, se você apagar a última entrada, ele VAI guardar a lista vazia.
-
       if (isElectron) {
         try {
           await window.electronAPI.saveEntries(entries)
@@ -72,7 +68,7 @@ export default function Home() {
       }
     }
     saveEntries()
-  }, [entries, isLoaded]) // Agora depende de isLoaded também
+  }, [entries, isLoaded])
 
   const addEntry = (entry: Omit<Entry, "id">) => {
     const newEntry: Entry = {
@@ -80,13 +76,13 @@ export default function Home() {
       id: Date.now().toString(),
     }
     setEntries((prev) => [newEntry, ...prev])
+    // Mudar para a aba de registros após adicionar uma nova entrada
+    setActiveTab("table")
   }
 
-  // A sua função deleteEntry está correta, ela atualiza o estado...
   const deleteEntry = (id: string) => {
     setEntries((prev) => prev.filter((entry) => entry.id !== id))
   }
-  // ... e o useEffect acima deteta essa mudança e guarda o resultado.
 
   const handleExport = async () => {
     if (isElectron) {
@@ -146,7 +142,10 @@ export default function Home() {
 
         <StatsCards entries={entries} />
 
-        <Tabs defaultValue="form" className="w-full">
+        {/* ==================== INÍCIO DA CORREÇÃO ==================== */}
+        {/* 2. Passe o estado para o componente Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        {/* ==================== FIM DA CORREÇÃO ======================= */}
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="form">Nova Entrada</TabsTrigger>
             <TabsTrigger value="table">Registros ({entries.length})</TabsTrigger>
