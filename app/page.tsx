@@ -13,6 +13,8 @@ import { useToast } from "@/hooks/use-toast"
 export interface Entry {
   id: string
   nome: string
+  // NOVO: Adicionado o campo CPF
+  cpf: string
   funcao: string
   orgao: string
   municipio: string
@@ -27,12 +29,8 @@ export default function Home() {
   const [entries, setEntries] = useState<Entry[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
   const { toast } = useToast()
-  
-  // ==================== INÍCIO DA CORREÇÃO ====================
-  // 1. Adicione um estado para controlar a aba ativa
-  const [activeTab, setActiveTab] = useState("form")
-  // ==================== FIM DA CORREÇÃO =======================
 
+  // Carrega os dados uma vez ao iniciar
   useEffect(() => {
     const loadEntries = async () => {
       if (isElectron) {
@@ -52,6 +50,7 @@ export default function Home() {
     loadEntries()
   }, [])
 
+  // Guarda os dados sempre que 'entries' muda
   useEffect(() => {
     if (!isLoaded) return
 
@@ -76,8 +75,6 @@ export default function Home() {
       id: Date.now().toString(),
     }
     setEntries((prev) => [newEntry, ...prev])
-    // Mudar para a aba de registros após adicionar uma nova entrada
-    setActiveTab("table")
   }
 
   const deleteEntry = (id: string) => {
@@ -142,10 +139,7 @@ export default function Home() {
 
         <StatsCards entries={entries} />
 
-        {/* ==================== INÍCIO DA CORREÇÃO ==================== */}
-        {/* 2. Passe o estado para o componente Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        {/* ==================== FIM DA CORREÇÃO ======================= */}
+        <Tabs defaultValue="form" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="form">Nova Entrada</TabsTrigger>
             <TabsTrigger value="table">Registros ({entries.length})</TabsTrigger>
@@ -157,7 +151,8 @@ export default function Home() {
                 <CardDescription>Preencha os dados da pessoa que está entrando no local</CardDescription>
               </CardHeader>
               <CardContent>
-                <EntryForm onSubmit={addEntry} />
+                {/* ALTERADO: Passando a lista de 'entries' como prop */}
+                <EntryForm onSubmit={addEntry} entries={entries} />
               </CardContent>
             </Card>
           </TabsContent>

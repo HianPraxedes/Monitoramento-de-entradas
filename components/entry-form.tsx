@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,15 +8,20 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Camera, Upload, X, Video } from "lucide-react"
+// Importando a interface Entry do componente pai
 import type { Entry } from "@/app/page"
 
 interface EntryFormProps {
   onSubmit: (entry: Omit<Entry, "id">) => void
+  // Prop para receber todos os registros existentes
+  entries: Entry[]
 }
 
-export function EntryForm({ onSubmit }: EntryFormProps) {
+export function EntryForm({ onSubmit, entries }: EntryFormProps) {
   const [formData, setFormData] = useState({
     nome: "",
+    // Campo CPF adicionado ao estado
+    cpf: "",
     funcao: "",
     orgao: "",
     municipio: "",
@@ -32,6 +36,27 @@ export function EntryForm({ onSubmit }: EntryFormProps) {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  // Função para buscar e preencher dados com base no CPF
+  const handleCpfBlur = () => {
+    const cpfToFind = formData.cpf.trim()
+    if (!cpfToFind) return
+
+    // Encontra a entrada mais recente com este CPF
+    const foundEntry = entries.find((entry) => entry.cpf === cpfToFind)
+
+    if (foundEntry) {
+      setFormData((prev) => ({
+        ...prev,
+        nome: foundEntry.nome,
+        funcao: foundEntry.funcao,
+        orgao: foundEntry.orgao,
+        municipio: foundEntry.municipio,
+        telefone: foundEntry.telefone,
+        foto: "", // Garante que a foto seja limpa para uma nova captura
+      }))
+    }
   }
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,8 +123,8 @@ export function EntryForm({ onSubmit }: EntryFormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.nome || !formData.funcao || !formData.orgao) {
-      alert("Por favor, preencha pelo menos o nome, função e órgão.")
+    if (!formData.nome || !formData.cpf || !formData.funcao || !formData.orgao) {
+      alert("Por favor, preencha pelo menos o nome, CPF, função e órgão.")
       return
     }
 
@@ -121,6 +146,7 @@ export function EntryForm({ onSubmit }: EntryFormProps) {
     // Limpar formulário
     setFormData({
       nome: "",
+      cpf: "",
       funcao: "",
       orgao: "",
       municipio: "",
@@ -140,6 +166,20 @@ export function EntryForm({ onSubmit }: EntryFormProps) {
               value={formData.nome}
               onChange={(e) => handleInputChange("nome", e.target.value)}
               placeholder="Nome completo"
+              required
+            />
+          </div>
+
+          {/* Campo de input para o CPF */}
+          <div className="space-y-2">
+            <Label htmlFor="cpf">CPF *</Label>
+            {/* CORREÇÃO: Adicionado '/>' para fechar o componente Input corretamente */}
+            <Input
+              id="cpf"
+              value={formData.cpf}
+              onChange={(e) => handleInputChange("cpf", e.target.value)}
+              onBlur={handleCpfBlur}
+              placeholder="000.000.000-00"
               required
             />
           </div>
@@ -247,7 +287,6 @@ export function EntryForm({ onSubmit }: EntryFormProps) {
                 muted
                 className="w-full h-80 object-cover"
                 onLoadedMetadata={() => {
-                  // Garantir que o video está carregado
                   if (videoRef.current) {
                     videoRef.current.play()
                   }

@@ -4,10 +4,23 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Trash2, Search, Eye, Phone, MapPin, Building, FileText, Calendar } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Trash2, Search, Eye, Phone, MapPin, Building, User, Calendar } from "lucide-react"
 import type { Entry } from "@/app/page"
 
 interface EntryTableProps {
@@ -15,168 +28,128 @@ interface EntryTableProps {
   onDelete: (id: string) => void
 }
 
+// NOVO: Função auxiliar para converter strings de data em objetos Date
+// Esta função lida com os dois formatos: 'dd/mm/yyyy' e 'yyyy-mm-dd'
+const parseDate = (dateString: string): Date | null => {
+  if (!dateString) return null
+  
+  // Tenta o formato 'dd/mm/yyyy'
+  const partsBR = dateString.split('/')
+  if (partsBR.length === 3) {
+    const [day, month, year] = partsBR.map(Number)
+    // new Date() espera (ano, mês - 1, dia)
+    return new Date(year, month - 1, day)
+  }
+
+  // Tenta o formato 'yyyy-mm-dd'
+  const partsISO = dateString.split('-')
+  if (partsISO.length === 3) {
+    const [year, month, day] = partsISO.map(Number)
+    return new Date(year, month - 1, day)
+  }
+
+  return null
+}
+
+
 export function EntryTable({ entries, onDelete }: EntryTableProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null)
   const [startDate, setStartDate] = useState("")
   const [endDate, setEndDate] = useState("")
 
-  // ==================== AQUI ESTÁ A CORREÇÃO ====================
-  const filteredEntries = entries.filter((entry) => {
-    const matchesSearch =
-      entry.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.funcao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.orgao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      entry.municipio.toLowerCase().includes(searchTerm.toLowerCase())
-
-    if (!startDate && !endDate) return matchesSearch
-
-    // Converte a data da entrada (DD/MM/YYYY) para um objeto Date
-    const dateParts = entry.dataHoraEntrada.split(",")[0].split("/")
-    const entryDate = new Date(Number(dateParts[2]), Number(dateParts[1]) - 1, Number(dateParts[0]))
-
-    let matchesDate = true
-
-    if (startDate) {
-      // Converte a data do filtro (YYYY-MM-DD) para um objeto Date
-      const startParts = startDate.split("-")
-      const start = new Date(Number(startParts[0]), Number(startParts[1]) - 1, Number(startParts[2]))
-      start.setHours(0, 0, 0, 0) // Garante que a comparação é desde o INÍCIO do dia
-      if (entryDate < start) {
-        matchesDate = false
-      }
+  const handleDelete = (id: string) => {
+    if (window.confirm("Tem certeza que deseja excluir este registro?")) {
+      onDelete(id)
     }
+  }
+  
+  const filteredEntries = entries.filter((entry) => {
+    // Filtro de texto (nome, cpf, função, etc.)
+    const matchesSearch =
+      (entry.nome && entry.nome.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (entry.cpf && entry.cpf.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (entry.funcao && entry.funcao.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (entry.orgao && entry.orgao.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (entry.municipio && entry.municipio.toLowerCase().includes(searchTerm.toLowerCase()))
 
-    if (endDate) {
-      // Converte a data do filtro (YYYY-MM-DD) para um objeto Date
-      const endParts = endDate.split("-")
-      const end = new Date(Number(endParts[0]), Number(endParts[1]) - 1, Number(endParts[2]))
-      end.setHours(23, 59, 59, 999) // Garante que a comparação inclui o dia inteiro até o FIM
-      if (entryDate > end) {
-        matchesDate = false
+    // LÓGICA DE FILTRO DE DATA CORRIGIDA
+    let matchesDate = true // Assume que a data corresponde por padrão
+    
+    // Extrai apenas a parte da data da string 'dataHoraEntrada'
+    const entryDateStr = entry.dataHoraEntrada.split(",")[0].trim()
+    const entryDate = parseDate(entryDateStr)
+
+    if (entryDate) {
+      const start = parseDate(startDate)
+      const end = parseDate(endDate)
+
+      // Ajusta a data final para incluir o dia inteiro
+      if (end) {
+        end.setHours(23, 59, 59, 999)
+      }
+      
+      if (start && end) {
+        matchesDate = entryDate >= start && entryDate <= end
+      } else if (start) {
+        matchesDate = entryDate >= start
+      } else if (end) {
+        matchesDate = entryDate <= end
       }
     }
 
     return matchesSearch && matchesDate
   })
-  // ==============================================================
 
-  const generatePDF = async () => {
-    try {
-      const { jsPDF } = await import("jspdf")
-      const doc = new jsPDF()
-      doc.setFontSize(16)
-      doc.text("Relatório de Entradas", 20, 20)
-      if (startDate || endDate) {
-        doc.setFontSize(12)
-        const periodo = `Período: ${startDate || "Início"} até ${endDate || "Hoje"}`
-        doc.text(periodo, 20, 30)
-      }
-      doc.setFontSize(10)
-      let y = startDate || endDate ? 45 : 35
-      doc.text("Nome", 20, y)
-      doc.text("Função", 70, y)
-      doc.text("Órgão", 110, y)
-      doc.text("Data/Hora", 150, y)
-      y += 5
-      doc.line(20, y, 190, y)
-      y += 10
-      filteredEntries.forEach((entry) => {
-        if (y > 270) {
-          doc.addPage()
-          y = 20
-        }
-        doc.text(entry.nome.substring(0, 20), 20, y)
-        doc.text(entry.funcao.substring(0, 15), 70, y)
-        doc.text(entry.orgao.substring(0, 15), 110, y)
-        doc.text(entry.dataHoraEntrada, 150, y)
-        y += 8
-      })
-      const totalPages = doc.getNumberOfPages()
-      for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i)
-        doc.setFontSize(8)
-        doc.text(`Total de registros: ${filteredEntries.length}`, 20, 290)
-        doc.text(`Página ${i} de ${totalPages}`, 150, 290)
-        doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 20, 285)
-      }
-      const fileName = `relatorio-entradas-${new Date().toISOString().split("T")[0]}.pdf`
-      doc.save(fileName)
-    } catch (error) {
-      console.error("Erro ao gerar PDF:", error)
-      alert("Erro ao gerar o relatório PDF. Tente novamente.")
-    }
-  }
-
-  const handleDelete = (id: string) => {
-    if (confirm("Tem certeza que deseja excluir este registro?")) {
-      onDelete(id)
-    }
-  }
-
-  if (entries.length === 0) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground">Nenhum registro de entrada encontrado.</p>
-        <p className="text-sm text-muted-foreground mt-2">
-          Use a aba "Nova Entrada" para adicionar o primeiro registro.
-        </p>
-      </div>
-    )
-  }
-
-return (
+  return (
     <div className="space-y-4">
+      {/* Seção de Filtros */}
       <div className="flex flex-col md:flex-row gap-4">
-        <div className="flex items-center gap-2 flex-1">
-          <Search className="h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nome, função, órgão ou município..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm"
-          />
+        <div className="flex-1">
+          <Label htmlFor="search">Pesquisar</Label>
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="search"
+              placeholder="Pesquisar por nome, CPF, órgão..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
+            />
+          </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <Label htmlFor="start-date" className="text-sm">
-            De:
-          </Label>
-          <Input
-            id="start-date"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-auto"
-          />
-          <Label htmlFor="end-date" className="text-sm">
-            Até:
-          </Label>
-          <Input
-            id="end-date"
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="w-auto"
-          />
+        <div className="flex items-end gap-2">
+          <div>
+            <Label htmlFor="start-date">Data de Início</Label>
+            <Input
+              id="start-date"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="end-date">Data Final</Label>
+            <Input
+              id="end-date"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </div>
         </div>
-
-        <Button onClick={generatePDF} variant="outline">
-          <FileText className="h-4 w-4 mr-2" />
-          Gerar PDF
-        </Button>
       </div>
 
-      <div className="rounded-md border">
+      {/* Tabela de Registros */}
+      <div className="border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Foto</TableHead>
               <TableHead>Nome</TableHead>
-              <TableHead>Função</TableHead>
+              <TableHead>CPF</TableHead>
               <TableHead>Órgão</TableHead>
-              <TableHead>Data/Hora</TableHead>
+              <TableHead>Data e Hora de Entrada</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -184,76 +157,63 @@ return (
             {filteredEntries.map((entry) => (
               <TableRow key={entry.id}>
                 <TableCell>
-                  {entry.foto ? (
-                    <img
-                      src={entry.foto || "/placeholder.svg"}
-                      alt={`Foto de ${entry.nome}`}
-                      className="w-10 h-10 object-cover rounded-full"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
-                      <span className="text-xs text-muted-foreground">{entry.nome.charAt(0).toUpperCase()}</span>
-                    </div>
-                  )}
+                  <img
+                    src={entry.foto || "/placeholder.svg"}
+                    alt={`Foto de ${entry.nome}`}
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
                 </TableCell>
                 <TableCell className="font-medium">{entry.nome}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{entry.funcao}</Badge>
-                </TableCell>
+                <TableCell>{entry.cpf}</TableCell>
                 <TableCell>{entry.orgao}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{entry.dataHoraEntrada}</TableCell>
+                <TableCell>{entry.dataHoraEntrada}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
-                    {/* ==================== AQUI ESTÁ A CORREÇÃO ==================== */}
-                    <Dialog modal={false}>
-                    {/* ================================================================ */}
+                    <Dialog onOpenChange={(open) => !open && setSelectedEntry(null)}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm" onClick={() => setSelectedEntry(entry)}>
                           <Eye className="h-4 w-4" />
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-md">
+                      <DialogContent className="sm:max-w-md">
                         <DialogHeader>
-                          <DialogTitle>Detalhes da Entrada</DialogTitle>
+                          <DialogTitle>Detalhes do Registro</DialogTitle>
                         </DialogHeader>
                         {selectedEntry && (
-                          <div className="space-y-4">
-                            {selectedEntry.foto && (
-                              <div className="flex justify-center">
-                                <img
-                                  src={selectedEntry.foto || "/placeholder.svg"}
-                                  alt={`Foto de ${selectedEntry.nome}`}
-                                  className="w-24 h-24 object-cover rounded-full"
-                                />
+                          <div className="flex flex-col sm:flex-row gap-6 py-4">
+                            <img
+                              src={selectedEntry.foto || "/placeholder.svg"}
+                              alt={`Foto de ${selectedEntry.nome}`}
+                              className="h-32 w-32 rounded-lg object-cover mx-auto sm:mx-0"
+                            />
+                            <div className="space-y-2 text-sm">
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-semibold">{selectedEntry.nome}</span>
                               </div>
-                            )}
-                            <div className="space-y-3">
-                              <div>
-                                <h3 className="font-semibold text-lg">{selectedEntry.nome}</h3>
-                                <Badge variant="secondary" className="mt-1">
-                                  {selectedEntry.funcao}
-                                </Badge>
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-muted-foreground" />
+                                <Badge variant="secondary">{selectedEntry.cpf}</Badge>
                               </div>
-
-                              <div className="flex items-center gap-2 text-sm">
+                              <div className="flex items-center gap-2">
                                 <Building className="h-4 w-4 text-muted-foreground" />
-                                <span>{selectedEntry.orgao}</span>
+                                <span>
+                                  {selectedEntry.funcao} em{" "}
+                                  <span className="font-medium">{selectedEntry.orgao}</span>
+                                </span>
                               </div>
-
                               {selectedEntry.municipio && (
-                                <div className="flex items-center gap-2 text-sm">
+                                <div className="flex items-center gap-2">
                                   <MapPin className="h-4 w-4 text-muted-foreground" />
                                   <span>{selectedEntry.municipio}</span>
                                 </div>
                               )}
-
                               {selectedEntry.telefone && (
-                                <div className="flex items-center gap-2 text-sm">
+                                <div className="flex items-center gap-2">
                                   <Phone className="h-4 w-4 text-muted-foreground" />
                                   <span>{selectedEntry.telefone}</span>
                                 </div>
                               )}
-
                               <div className="pt-2 border-t">
                                 <p className="text-sm text-muted-foreground">Entrada registrada em:</p>
                                 <p className="font-medium">{selectedEntry.dataHoraEntrada}</p>
@@ -263,7 +223,6 @@ return (
                         )}
                       </DialogContent>
                     </Dialog>
-
                     <Button
                       variant="outline"
                       size="sm"
@@ -279,7 +238,6 @@ return (
           </TableBody>
         </Table>
       </div>
-
       {filteredEntries.length === 0 && (searchTerm || startDate || endDate) && (
         <div className="text-center py-4">
           <p className="text-muted-foreground">Nenhum registro encontrado para os filtros aplicados.</p>
