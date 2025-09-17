@@ -20,7 +20,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Trash2, Search, Eye, Phone, MapPin, Building, User, Calendar } from "lucide-react"
+// NOVO: Adicionado o ícone FileText que estava faltando na importação
+import { Trash2, Search, Eye, Phone, MapPin, Building, User, FileText } from "lucide-react"
 import type { Entry } from "@/app/page"
 
 interface EntryTableProps {
@@ -28,20 +29,16 @@ interface EntryTableProps {
   onDelete: (id: string) => void
 }
 
-// NOVO: Função auxiliar para converter strings de data em objetos Date
-// Esta função lida com os dois formatos: 'dd/mm/yyyy' e 'yyyy-mm-dd'
+// Função auxiliar para converter strings de data em objetos Date
 const parseDate = (dateString: string): Date | null => {
   if (!dateString) return null
   
-  // Tenta o formato 'dd/mm/yyyy'
   const partsBR = dateString.split('/')
   if (partsBR.length === 3) {
     const [day, month, year] = partsBR.map(Number)
-    // new Date() espera (ano, mês - 1, dia)
     return new Date(year, month - 1, day)
   }
 
-  // Tenta o formato 'yyyy-mm-dd'
   const partsISO = dateString.split('-')
   if (partsISO.length === 3) {
     const [year, month, day] = partsISO.map(Number)
@@ -65,7 +62,6 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
   }
   
   const filteredEntries = entries.filter((entry) => {
-    // Filtro de texto (nome, cpf, função, etc.)
     const matchesSearch =
       (entry.nome && entry.nome.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (entry.cpf && entry.cpf.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -73,10 +69,8 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
       (entry.orgao && entry.orgao.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (entry.municipio && entry.municipio.toLowerCase().includes(searchTerm.toLowerCase()))
 
-    // LÓGICA DE FILTRO DE DATA CORRIGIDA
-    let matchesDate = true // Assume que a data corresponde por padrão
+    let matchesDate = true
     
-    // Extrai apenas a parte da data da string 'dataHoraEntrada'
     const entryDateStr = entry.dataHoraEntrada.split(",")[0].trim()
     const entryDate = parseDate(entryDateStr)
 
@@ -84,7 +78,6 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
       const start = parseDate(startDate)
       const end = parseDate(endDate)
 
-      // Ajusta a data final para incluir o dia inteiro
       if (end) {
         end.setHours(23, 59, 59, 999)
       }
@@ -191,10 +184,13 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
                                 <User className="h-4 w-4 text-muted-foreground" />
                                 <span className="font-semibold">{selectedEntry.nome}</span>
                               </div>
+                              
+                              {/* ALTERAÇÃO AQUI: Adicionado o campo de CPF */}
                               <div className="flex items-center gap-2">
                                 <FileText className="h-4 w-4 text-muted-foreground" />
                                 <Badge variant="secondary">{selectedEntry.cpf}</Badge>
                               </div>
+
                               <div className="flex items-center gap-2">
                                 <Building className="h-4 w-4 text-muted-foreground" />
                                 <span>
