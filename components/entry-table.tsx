@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-// Importando jsPDF para a função generatePDF
 import jsPDF from "jspdf"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,14 +29,29 @@ interface EntryTableProps {
   onDelete: (id: string) => void
 }
 
-// Função auxiliar para converter strings de data
+// CORRIGIDO: Função de data mais robusta para lidar com os dois formatos
 const parseDate = (dateString: string): Date | null => {
-    const datePart = dateString.split(" ")[0]
-    const [day, month, year] = datePart.split("/").map(Number)
+  if (!dateString) return null
+
+  // Tenta o formato 'dd/mm/yyyy...' (vindo dos registros)
+  const partsBR = dateString.split(',')[0].trim().split('/');
+  if (partsBR.length === 3) {
+    const [day, month, year] = partsBR.map(Number);
     if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-        return new Date(year, month - 1, day)
+        // Mês em JS é 0-indexado (0 = Janeiro)
+        return new Date(year, month - 1, day);
     }
-    return null
+  }
+
+  // Tenta o formato 'yyyy-mm-dd' (vindo do input de data)
+  const partsISO = dateString.split('-');
+  if (partsISO.length === 3) {
+    const [year, month, day] = partsISO.map(Number);
+     if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        return new Date(year, month - 1, day);
+    }
+  }
+  return null;
 }
 
 export function EntryTable({ entries, onDelete }: EntryTableProps) {
@@ -53,42 +67,46 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
   }
 
   const filteredEntries = entries.filter((entry) => {
+    // CORRIGIDO: Busca por CPF adicionada
     const matchesSearch =
       (entry.nome?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-      (entry.cpf?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+      (entry.cpf?.toLowerCase() || "").includes(searchTerm.toLowerCase()) || // <-- ADICIONADO AQUI
       (entry.funcao?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
       (entry.orgao?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
       (entry.municipio?.toLowerCase() || "").includes(searchTerm.toLowerCase())
 
+    // CORRIGIDO: Lógica de filtro de data
     let matchesDate = true
+    const entryDate = parseDate(entry.dataHoraEntrada)
+    
     if (startDate || endDate) {
-        const entryDate = parseDate(entry.dataHoraEntrada)
-        const start = startDate ? new Date(startDate) : null
-        const end = endDate ? new Date(endDate) : null
+      const start = parseDate(startDate)
+      const end = parseDate(endDate)
 
-        if (entryDate) {
-            if (end) end.setHours(23, 59, 59, 999)
-            
-            if (start && end) {
-                matchesDate = entryDate >= start && entryDate <= end
-            } else if (start) {
-                matchesDate = entryDate >= start
-            } else if (end) {
-                matchesDate = entryDate <= end
-            }
-        } else {
-            matchesDate = false
+      if (entryDate) {
+        // Garante que o dia final seja incluído na busca
+        if (end) end.setHours(23, 59, 59, 999) 
+
+        if (start && end) {
+          matchesDate = entryDate >= start && entryDate <= end
+        } else if (start) {
+          matchesDate = entryDate >= start
+        } else if (end) {
+          matchesDate = entryDate <= end
         }
+      } else {
+        matchesDate = false // Se a data do registro for inválida, não deve corresponder ao filtro
+      }
     }
     
     return matchesSearch && matchesDate
   })
 
-  // ALTERADO: Função generatePDF modificada para incluir a FUNÇÃO
+  // Função para gerar PDF com a coluna "Função" inclusa
   const generatePDF = async () => {
     try {
       const { jsPDF } = await import("jspdf")
-      const doc = new jsPDF({ orientation: "landscape" }) 
+      const doc = new jsPDF({ orientation: "landscape" })
 
       doc.setFontSize(16)
       doc.text("Relatório de Entradas", 20, 20)
@@ -105,13 +123,13 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
       let y = startDate || endDate ? 45 : 35
       const startX = 14
 
-      // Cabeçalho da tabela com a coluna "Função" e posições ajustadas
+      // Cabeçalho ajustado
       doc.text("Nome", startX, y)
       doc.text("CPF", startX + 55, y)
-      doc.text("Função", startX + 85, y) // Adicionado
-      doc.text("Telefone", startX + 125, y) // Ajustado
-      doc.text("Órgão", startX + 155, y) // Ajustado
-      doc.text("Data/Hora", startX + 210, y) // Ajustado
+      doc.text("Função", startX + 85, y)
+      doc.text("Telefone", startX + 125, y)
+      doc.text("Órgão", startX + 155, y)
+      doc.text("Data/Hora", startX + 210, y)
 
       y += 5
       doc.line(startX, y, 280, y)
@@ -123,17 +141,18 @@ export function EntryTable({ entries, onDelete }: EntryTableProps) {
           y = 20
         }
 
-        // Dados da tabela com a coluna "Função" e posições ajustadas
+        // Dados ajustados
         doc.text(entry.nome.substring(0, 28), startX, y)
         doc.text(entry.cpf || "N/A", startX + 55, y)
-        doc.text(entry.funcao.substring(0, 18) || "N/A", startX + 85, y) // Adicionado
-        doc.text(entry.telefone || "N/A", startX + 125, y) // Ajustado
-        doc.text(entry.orgao.substring(0, 25), startX + 155, y) // Ajustado
-        doc.text(entry.dataHoraEntrada, startX + 210, y) // Ajustado
+        doc.text(entry.funcao.substring(0, 18) || "N/A", startX + 85, y)
+        doc.text(entry.telefone || "N/A", startX + 125, y)
+        doc.text(entry.orgao.substring(0, 25), startX + 155, y)
+        doc.text(entry.dataHoraEntrada, startX + 210, y)
 
         y += 7
       })
 
+      // Rodapé
       const pageCount = doc.getNumberOfPages()
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i)
